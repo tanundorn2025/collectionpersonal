@@ -145,6 +145,7 @@ table.emp td.l{white-space:normal}
   </div>
   <div class="tools">
     <div class="themes" id="themes" title="เลือกธีม"></div>
+    <button class="btn ghost" id="btnVals" title="แสดงตัวเลขบนเส้น/แท่งกราฟ"></button>
     <button class="btn ghost" id="btnMask" title="ซ่อนนามสกุลบางส่วนตาม PDPA"></button>
     <button class="btn ghost" id="btnTable" title="สลับมุมมองตารางข้อมูลของกราฟ">▦ ตารางภาค</button>
     <button class="btn" id="btnUpload">⬆ อัพโหลดข้อมูลใหม่</button>
@@ -263,6 +264,7 @@ const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim
 const pal=()=>DARK.has(theme)?CAT.dark:CAT.light;
 const regColor=r=>{const i=regionsAll.indexOf(r);return pal()[(i<0?0:i)%8]};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let showVals=false;try{showVals=localStorage.getItem('dash_vals')==='1'}catch(e){}
 let maskOn=true;try{maskOn=localStorage.getItem('dash_mask')!=='0'}catch(e){}
 const COMB=/[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/;
 function maskName(n){
@@ -349,9 +351,13 @@ function seg(id,v){[...$(id).children].forEach(b=>b.classList.toggle('on',b.data
 function setMaskBtn(){$('btnMask').textContent=maskOn?'🔒 ซ่อนนามสกุล: เปิด':'🔓 ซ่อนนามสกุล: ปิด'}
 $('btnMask').onclick=()=>{maskOn=!maskOn;try{localStorage.setItem('dash_mask',maskOn?'1':'0')}catch(e){}setMaskBtn();closeModal();closeFS();render()};
 setMaskBtn();
+function setValsBtn(){$('btnVals').textContent=showVals?'🔢 ตัวเลขบนกราฟ: เปิด':'🔢 ตัวเลขบนกราฟ: ปิด';$('btnVals').style.outline=showVals?'2px solid var(--accent)':'none'}
+$('btnVals').onclick=()=>{showVals=!showVals;try{localStorage.setItem('dash_vals',showVals?'1':'0')}catch(e){}setValsBtn();closeModal();closeFS();render()};
+setValsBtn();
 $('btnTable').onclick=()=>{const c=$('regionTableCard');c.style.display=c.style.display==='none'?'block':'none'};
 
 /* ---------- chart plumbing ---------- */
+function horizOf(cfg){return cfg.options&&cfg.options.indexAxis==='y'}
 function mk(id,cfg){
   if(charts[id])charts[id].destroy();
   const txt=css('--text2'),grid=css('--line');
@@ -360,10 +366,36 @@ function mk(id,cfg){
   cfg.options.plugins=Object.assign({legend:{display:false}},cfg.options.plugins||{});
   cfg.options.plugins.tooltip=Object.assign({backgroundColor:css('--surface2'),titleColor:css('--text'),bodyColor:css('--text2'),borderColor:css('--line'),borderWidth:1,padding:10,boxPadding:4},cfg.options.plugins.tooltip||{});
   if(cfg.options.scales){for(const k in cfg.options.scales){const s=cfg.options.scales[k];s.grid=Object.assign({color:grid,drawTicks:false},s.grid||{});s.border={display:false};s.ticks=Object.assign({color:txt},s.ticks||{})}}
+  if(FMT[id]){cfg.options.plugins.valLabels={fmt:FMT[id],on:showVals};if(showVals){cfg.options.layout={padding:{top:20,right:horizOf(cfg)?52:12}};const sc=cfg.options.scales;if(sc&&!horizOf(cfg)){if(sc.y){sc.y.grace='10%';if(sc.y.beginAtZero||sc.y.suggestedMin===0||sc.y.min===0)sc.y.min=0}if(cfg.type==='line'&&sc.x)sc.x.offset=true}}}
   CFG[id]=dc(cfg);
   charts[id]=new Chart($(id),cfg);
 }
 const pctTick=v=>(v*100).toFixed(0)+'%';
+/* ---------- value labels plugin ---------- */
+const FMT={
+  chTrend:v=>pc(v),chAmt:v=>v.toFixed(1),chRegion:v=>pc(v),chRegionTrend:v=>pc(v,0),
+  chEmp:v=>metric==='got'?money(v):pc(v),chGrp:v=>metric==='got'?money(v):pc(v),chDist:v=>String(v),
+  chEm:v=>pc(v,0),chEm3:v=>pc(v,0),chEm2:v=>money(v),chEm4:v=>nf(v)
+};
+Chart.register({id:'valLabels',afterDatasetsDraw(chart,args,o){
+  if(!o||!o.on||!o.fmt)return;
+  const ctx=chart.ctx,horiz=chart.options.indexAxis==='y';
+  ctx.save();ctx.font="600 11px 'Noto Sans Thai',sans-serif";ctx.lineJoin='round';ctx.lineWidth=3;
+  ctx.strokeStyle=css('--surface');ctx.fillStyle=css('--text');
+  chart.data.datasets.forEach((ds,di)=>{
+    if(!chart.isDatasetVisible(di)||ds.type==='scatter'||(ds.borderDash&&ds.borderDash.length))return;
+    const meta=chart.getDatasetMeta(di),isBar=meta.type==='bar';
+    meta.data.forEach((el,i)=>{
+      let v=ds.data[i];if(v&&typeof v==='object')v=v.y;
+      if(v===null||v===undefined||isNaN(v))return;
+      const s=o.fmt(v);
+      if(horiz&&isBar){ctx.textAlign='left';ctx.textBaseline='middle';ctx.strokeText(s,el.x+5,el.y);ctx.fillText(s,el.x+5,el.y)}
+      else{ctx.textAlign='center';ctx.textBaseline='bottom';const y=el.y-(isBar?4:8);ctx.strokeText(s,el.x,y);ctx.fillText(s,el.x,y)}
+    });
+  });
+  ctx.restore();
+}});
+
 function regionLegend(id){$(id).innerHTML=regionsAll.map(r=>`<span><i style="background:${regColor(r)}"></i>${esc(r)}</span>`).join('')}
 
 /* ---------- render ---------- */

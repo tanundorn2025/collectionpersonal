@@ -126,7 +126,10 @@ table.emp td.l{white-space:normal}
 .card{position:relative}
 .xbtn{position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--text2);cursor:pointer;font-size:15px;line-height:1;z-index:2}
 .xbtn:hover{color:var(--text);border-color:var(--accent)}
-.card:has(>.xbtn) h3{padding-right:38px}
+.vbtn{position:absolute;top:10px;right:46px;height:30px;padding:0 9px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--text2);cursor:pointer;font:600 12px 'Noto Sans Thai';z-index:2}
+.vbtn.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.vbtn:hover{border-color:var(--accent)}
+.card:has(>.xbtn) h3{padding-right:90px}
 .fs{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.6);display:none;padding:2.5vh 2.5vw}
 .fs.show{display:block}
 .fsbox{background:var(--surface);border:1px solid var(--line);border-radius:16px;width:100%;height:100%;padding:18px 22px;display:flex;flex-direction:column}
@@ -236,7 +239,7 @@ table.emp td.l{white-space:normal}
 <div class="foot" id="foot"></div>
 </div>
 
-<div class="fs" id="fs"><div class="fsbox"><header><div><h2 id="fsT"></h2><div class="hint" id="fsH"></div><div class="legend" id="fsL"></div></div><button class="btn ghost" id="fsX">✕ ปิด (Esc)</button></header><div class="fsbody" id="fsB"></div></div></div>
+<div class="fs" id="fs"><div class="fsbox"><header><div><h2 id="fsT"></h2><div class="hint" id="fsH"></div><div class="legend" id="fsL"></div></div><div style="display:flex;gap:8px"><button class="btn ghost" id="fsV" title="แสดง/ซ่อนตัวเลข">🔢 ตัวเลข</button><button class="btn ghost" id="fsX">✕ ปิด (Esc)</button></div></header><div class="fsbody" id="fsB"></div></div></div>
 <div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
 
 <script>
@@ -352,11 +355,28 @@ function setMaskBtn(){$('btnMask').textContent=maskOn?'🔒 ซ่อนนา�
 $('btnMask').onclick=()=>{maskOn=!maskOn;try{localStorage.setItem('dash_mask',maskOn?'1':'0')}catch(e){}setMaskBtn();closeModal();closeFS();render()};
 setMaskBtn();
 function setValsBtn(){$('btnVals').textContent=showVals?'🔢 ตัวเลขบนกราฟ: เปิด':'🔢 ตัวเลขบนกราฟ: ปิด';$('btnVals').style.outline=showVals?'2px solid var(--accent)':'none'}
-$('btnVals').onclick=()=>{showVals=!showVals;try{localStorage.setItem('dash_vals',showVals?'1':'0')}catch(e){}setValsBtn();closeModal();closeFS();render()};
+$('btnVals').onclick=()=>{showVals=!showVals;for(const k in VALS)delete VALS[k];try{localStorage.setItem('dash_vals',showVals?'1':'0')}catch(e){}setValsBtn();closeModal();closeFS();render()};
 setValsBtn();
 $('btnTable').onclick=()=>{const c=$('regionTableCard');c.style.display=c.style.display==='none'?'block':'none'};
 
 /* ---------- chart plumbing ---------- */
+
+/* per-chart value labels */
+const VALS={};
+const isOn=id=>VALS[id]!==undefined?VALS[id]:showVals;
+function applyVals(id,cfg){
+  if(!FMT[id])return cfg;const on=isOn(id);
+  cfg.options=cfg.options||{};cfg.options.plugins=cfg.options.plugins||{};
+  cfg.options.plugins.valLabels={fmt:FMT[id],on};
+  if(on){cfg.options.layout={padding:{top:20,right:horizOf(cfg)?52:12}};const sc=cfg.options.scales;
+    if(sc&&!horizOf(cfg)){if(sc.y){sc.y.grace='10%';if(sc.y.beginAtZero||sc.y.suggestedMin===0||sc.y.min===0)sc.y.min=0}if(cfg.type==='line'&&sc.x)sc.x.offset=true}}
+  return cfg;
+}
+function syncV(){document.querySelectorAll('.vbtn').forEach(b=>{const c=b.parentElement.querySelector('.cv canvas');if(c)b.classList.toggle('on',isOn(c.id))});const f=$('fsV');if(f&&fsId)f.classList.toggle('on',isOn(fsId))}
+function rebuild(id){
+  if(!CFG[id])return;if(charts[id])charts[id].destroy();
+  charts[id]=new Chart($(id),applyVals(id,dc(CFG[id])));syncV();
+}
 function horizOf(cfg){return cfg.options&&cfg.options.indexAxis==='y'}
 function mk(id,cfg){
   if(charts[id])charts[id].destroy();
@@ -366,9 +386,8 @@ function mk(id,cfg){
   cfg.options.plugins=Object.assign({legend:{display:false}},cfg.options.plugins||{});
   cfg.options.plugins.tooltip=Object.assign({backgroundColor:css('--surface2'),titleColor:css('--text'),bodyColor:css('--text2'),borderColor:css('--line'),borderWidth:1,padding:10,boxPadding:4},cfg.options.plugins.tooltip||{});
   if(cfg.options.scales){for(const k in cfg.options.scales){const s=cfg.options.scales[k];s.grid=Object.assign({color:grid,drawTicks:false},s.grid||{});s.border={display:false};s.ticks=Object.assign({color:txt},s.ticks||{})}}
-  if(FMT[id]){cfg.options.plugins.valLabels={fmt:FMT[id],on:showVals};if(showVals){cfg.options.layout={padding:{top:20,right:horizOf(cfg)?52:12}};const sc=cfg.options.scales;if(sc&&!horizOf(cfg)){if(sc.y){sc.y.grace='10%';if(sc.y.beginAtZero||sc.y.suggestedMin===0||sc.y.min===0)sc.y.min=0}if(cfg.type==='line'&&sc.x)sc.x.offset=true}}}
   CFG[id]=dc(cfg);
-  charts[id]=new Chart($(id),cfg);
+  charts[id]=new Chart($(id),applyVals(id,cfg));syncV();
 }
 const pctTick=v=>(v*100).toFixed(0)+'%';
 /* ---------- value labels plugin ---------- */
@@ -694,13 +713,15 @@ function readFile(f){
 }
 
 /* ---------- expand chart ---------- */
-let fsState=null;
+let fsState=null,fsId=null;
 function dc(o){if(Array.isArray(o))return o.map(dc);if(o&&typeof o==='object'&&Object.getPrototypeOf(o)===Object.prototype){const r={};for(const k in o)r[k]=dc(o[k]);return r}return o}
 
 function addExpand(root){
   root.querySelectorAll('.card').forEach(c=>{
     if(c.querySelector(':scope>.xbtn')||!c.querySelector('.cv canvas'))return;
     const b=document.createElement('button');b.className='xbtn';b.title='ขยายกราฟ';b.textContent='⤢';b.dataset.x='1';c.appendChild(b);
+    const cid=c.querySelector('.cv canvas').id;
+    if(FMT[cid]&&!c.querySelector(':scope>.vbtn')){const v=document.createElement('button');v.className='vbtn';v.title='แสดง/ซ่อนตัวเลขในกราฟนี้';v.textContent='123';c.appendChild(v)}
   });
 }
 function openFS(card){
@@ -710,13 +731,14 @@ function openFS(card){
   const lg=card.querySelector('.legend');$('fsL').innerHTML=lg?lg.innerHTML:'';
   $('fsB').innerHTML='<div class="cv"><canvas id="fsCanvas"></canvas></div>';
   $('fs').classList.add('show');
-  fsState=new Chart($('fsCanvas'),dc(CFG[cv.id]));
+  fsId=cv.id;$('fsV').style.display=FMT[fsId]?'':'none';fsState=new Chart($('fsCanvas'),applyVals(fsId,dc(CFG[fsId])));syncV();
 }
 function closeFS(){
-  if(!fsState)return;fsState.destroy();fsState=null;$('fsB').innerHTML='';$('fs').classList.remove('show');
+  if(!fsState)return;fsState.destroy();fsState=null;fsId=null;$('fsB').innerHTML='';$('fs').classList.remove('show');
 }
-document.addEventListener('click',e=>{const b=e.target.closest('.xbtn');if(b){e.stopPropagation();openFS(b.parentElement)}});
+document.addEventListener('click',e=>{const v=e.target.closest('.vbtn');if(v){e.stopPropagation();const id=v.parentElement.querySelector('.cv canvas').id;VALS[id]=!isOn(id);rebuild(id);return}const b=e.target.closest('.xbtn');if(b){e.stopPropagation();openFS(b.parentElement)}});
 $('fsX').onclick=closeFS;
+$('fsV').onclick=()=>{if(!fsId)return;const id=fsId;VALS[id]=!isOn(id);fsState.destroy();fsState=new Chart($('fsCanvas'),applyVals(id,dc(CFG[id])));if(charts[id])rebuild(id);syncV()};
 $('fs').addEventListener('click',e=>{if(e.target.id==='fs')closeFS()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&fsState){closeFS();e.stopImmediatePropagation()}},true);
 addExpand(document.body);

@@ -214,7 +214,7 @@ table.emp td.l{white-space:normal}
 </div>
 
 <div class="grid">
-  <div class="card c7"><h3>วิเคราะห์พนักงานรายคน: จำนวนสัญญา vs มูลค่าที่เก็บได้</h3><div class="hint">แกน X = % สัญญาที่เก็บได้ (วัดจากจำนวน) · แกน Y = % ค่างวดที่เก็บได้ (วัดจากมูลค่า เทียบเป้า) · เส้นประ = ค่าเฉลี่ยรวม · คลิกจุดเพื่อดูรายคน</div><div class="legend" id="lgQuad"></div><div class="cv tall"><canvas id="chQuad"></canvas></div></div>
+  <div class="card c7"><h3>วิเคราะห์พนักงานรายคน: จำนวนสัญญา vs มูลค่าที่เก็บได้</h3><div class="hint">แกน X = % สัญญาที่เก็บได้ (วัดจากจำนวน) · แกน Y = % ค่างวดที่เก็บได้ (วัดจากมูลค่า เทียบเป้า) · สี = กลุ่มผลงาน, รูปทรง = ภาค · เส้นประ = ค่าเฉลี่ยรวม · คลิกจุดเพื่อดูรายคน</div><div class="legend" id="lgQuad"></div><div class="cv tall"><canvas id="chQuad"></canvas></div></div>
   <div class="card c5"><h3>จัดกลุ่มพนักงานตามผลงาน</h3><div class="hint">คลิกการ์ดเพื่อกรองตารางด้านล่าง (พนักงานเป้าตั้งแต่ 50,000 บาท)</div><div class="qcards" id="qcards"></div></div>
 </div>
 
@@ -265,7 +265,15 @@ const pc=(n,d=1)=>(n*100).toFixed(d)+'%';
 const money=n=>Math.abs(n)>=1e6?(n/1e6).toFixed(2)+' ล้าน':nf(n);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const pal=()=>DARK.has(theme)?CAT.dark:CAT.light;
-const regColor=r=>{const i=regionsAll.indexOf(r);return pal()[(i<0?0:i)%8]};
+const REG_L=['#1b6e3c','#f08c00','#2ea6ee','#3d2b82'],REG_D=['#3cc47a','#f5a31a','#4db8f5','#9b86f0'];
+const REG_STYLE=['circle','rect','triangle','rectRot'];
+const regIdx=r=>{const i=regionsAll.indexOf(r);return i<0?0:i};
+const regColor=r=>{const i=regIdx(r);return i<4?(DARK.has(theme)?REG_D:REG_L)[i]:pal()[i%8]};
+const regStyle=r=>REG_STYLE[regIdx(r)%4];
+function symSVG(style,color,s){s=s||12;const h=s/2,c=`fill="${color}" stroke="${color}"`;
+  const g=style==='circle'?`<circle cx="${h}" cy="${h}" r="${h-1}" ${c}/>`:style==='rect'?`<rect x="1.5" y="1.5" width="${s-3}" height="${s-3}" rx="1.5" ${c}/>`:style==='triangle'?`<polygon points="${h},1 ${s-1},${s-1.5} 1,${s-1.5}" ${c} stroke-linejoin="round"/>`:`<polygon points="${h},0.5 ${s-0.5},${h} ${h},${s-0.5} 0.5,${h}" ${c} stroke-linejoin="round"/>`;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" style="vertical-align:-2px;margin-right:5px">${g}</svg>`}
+const regSym=(r,s)=>symSVG(regStyle(r),regColor(r),s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let showVals=false;try{showVals=localStorage.getItem('dash_vals')==='1'}catch(e){}
 let maskOn=true;try{maskOn=localStorage.getItem('dash_mask')!=='0'}catch(e){}
@@ -428,7 +436,7 @@ Chart.register({id:'valLabels',afterDatasetsDraw(chart,args,o){
   ctx.restore();
 }});
 
-function regionLegend(id){$(id).innerHTML=regionsAll.map(r=>`<span><i style="background:${regColor(r)}"></i>${esc(r)}</span>`).join('')}
+function regionLegend(id){$(id).innerHTML=regionsAll.map(r=>`<span>${regSym(r,13)}${esc(r)}</span>`).join('')}
 
 /* ---------- render ---------- */
 function render(){
@@ -496,7 +504,7 @@ function drawRegion(rows,sm){
   // fill = % ค่างวด (solid) · outline = % สัญญา (light)
   mk('chRegionTrend',{type:'line',data:{labels:sm,datasets:regs.map(r=>({label:r,data:sm.map(m=>{const x=rows.filter(q=>q.reg===r&&q.m===m);return x.length?agg(x).pctAmt:null}),borderColor:regColor(r),backgroundColor:regColor(r),borderWidth:2.5,tension:.3,pointRadius:5,pointBorderColor:css('--surface'),pointBorderWidth:2,spanGaps:true}))},
     options:{interaction:{mode:'index',intersect:false},plugins:{tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${pc(c.parsed.y)}`}}},scales:{y:{ticks:{callback:pctTick}},x:{grid:{display:false}}}}});
-  $('regionTable').innerHTML=`<table><thead><tr><th class="l">ภาค</th><th>พนักงาน</th><th>กลุ่ม</th><th>เป้า</th><th>เก็บได้</th><th>% ค่างวด</th><th>สัญญาทั้งหมด</th><th>เก็บได้</th><th>% สัญญา</th></tr></thead><tbody>${regs.map((r,i)=>{const rr=rows.filter(x=>x.reg===r);const a=ag[i];return `<tr style="cursor:default"><td class="l"><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${regColor(r)};margin-right:6px"></i>${esc(r)}</td><td>${new Set(rr.map(x=>x.emp)).size}</td><td>${new Set(rr.map(x=>x.grp)).size}</td><td>${nf(a.tgt)}</td><td>${nf(a.got)}</td><td>${pc(a.pctAmt)}</td><td>${nf(a.nC)}</td><td>${nf(a.nOk)}</td><td>${pc(a.pctCnt)}</td></tr>`}).join('')}</tbody></table>`;
+  $('regionTable').innerHTML=`<table><thead><tr><th class="l">ภาค</th><th>พนักงาน</th><th>กลุ่ม</th><th>เป้า</th><th>เก็บได้</th><th>% ค่างวด</th><th>สัญญาทั้งหมด</th><th>เก็บได้</th><th>% สัญญา</th></tr></thead><tbody>${regs.map((r,i)=>{const rr=rows.filter(x=>x.reg===r);const a=ag[i];return `<tr style="cursor:default"><td class="l">${regSym(r,12)}${esc(r)}</td><td>${new Set(rr.map(x=>x.emp)).size}</td><td>${new Set(rr.map(x=>x.grp)).size}</td><td>${nf(a.tgt)}</td><td>${nf(a.got)}</td><td>${pc(a.pctAmt)}</td><td>${nf(a.nC)}</td><td>${nf(a.nOk)}</td><td>${pc(a.pctCnt)}</td></tr>`}).join('')}</tbody></table>`;
 }
 
 function mval(o){return metric==='got'?o.got:metric==='pctCnt'?o.pctCnt:o.pctAmt}
@@ -526,7 +534,7 @@ function drawDistScatter(rows){
     options:{plugins:{tooltip:{callbacks:{label:c=>` ${c.parsed.y} คน`+(c.dataIndex===avgBin?' (ช่วงของค่าเฉลี่ยรวม '+pc(a.pctAmt)+')':'')}}},scales:{y:{beginAtZero:true,ticks:{precision:0},title:{display:true,text:'จำนวนพนักงาน'}},x:{grid:{display:false}}}}});
   const regs=regionsAll.filter(r=>F.regions.has(r));
   const maxT=Math.max(...es.map(e=>e.tgt),1);
-  const ds=regs.map(r=>({label:r,data:es.filter(e=>e.reg===r).map(e=>({x:e.tgt,y:e.pctAmt,e})),backgroundColor:regColor(r)+'cc',borderColor:css('--surface'),borderWidth:1.5,pointRadius:5,pointHoverRadius:8}));
+  const ds=regs.map(r=>({label:r,data:es.filter(e=>e.reg===r).map(e=>({x:e.tgt,y:e.pctAmt,e})),backgroundColor:regColor(r)+'e0',borderColor:css('--surface'),borderWidth:1.2,pointStyle:regStyle(r),pointRadius:regStyle(r)==='circle'?5.5:regStyle(r)==='rect'?5:7,pointHoverRadius:9}));
   ds.push({type:'line',label:'เฉลี่ยรวม',data:[{x:0,y:a.pctAmt},{x:maxT*1.05,y:a.pctAmt}],borderColor:css('--text2'),borderDash:[6,5],borderWidth:1.5,pointRadius:0,hoverRadius:0});
   mk('chScatter',{type:'scatter',data:{datasets:ds},options:{onClick:(ev,els)=>{if(els.length){const d=ds[els[0].datasetIndex].data[els[0].index];if(d&&d.e)openEmp(d.e.emp)}},
     plugins:{tooltip:{filter:c=>c.dataset.label!=='เฉลี่ยรวม',callbacks:{title:c=>maskName(c[0].raw.e.emp),label:c=>{const e=c.raw.e;return [` ${e.reg} · ${e.grp}`,` เป้า ${nf(e.tgt)} · เก็บได้ ${nf(e.got)}`,` % ค่างวด ${pc(e.pctAmt)}`]}}}},
@@ -579,9 +587,10 @@ function spark(e,sm,color){
 function drawQuad(rows){
   const {es,avg}=enrich(rows);const ok=es.filter(e=>e.q);
   const keys=['star','cnt','amt','low'];
-  $('lgQuad').innerHTML=keys.map(k=>`<span><i style="background:${qColor(k)}"></i>${Q[k].n}</span>`).join('');
+  $('lgQuad').innerHTML=keys.map(k=>`<span><i style="background:${qColor(k)}"></i>${Q[k].n}</span>`).join('')+'<span style="margin-left:10px;color:var(--muted)">| รูปทรง = ภาค:</span>'+regionsAll.map(r=>`<span>${symSVG(regStyle(r),css('--text2'),13)}${esc(r)}</span>`).join('');
   const maxX=Math.max(...ok.map(e=>e.pctCnt),avg.pctCnt)*1.05,maxY=Math.max(...ok.map(e=>e.pctAmt),avg.pctAmt)*1.05;
-  const ds=keys.map(k=>({label:Q[k].n,data:ok.filter(e=>e.q===k).map(e=>({x:e.pctCnt,y:e.pctAmt,e})),backgroundColor:qColor(k)+'cc',borderColor:css('--surface'),borderWidth:1.5,pointRadius:5,pointHoverRadius:8}));
+  const rad=r=>regStyle(r)==='circle'?5.5:regStyle(r)==='rect'?5:7;
+  const ds=keys.map(k=>{const pts=ok.filter(e=>e.q===k);return {label:Q[k].n,data:pts.map(e=>({x:e.pctCnt,y:e.pctAmt,e})),backgroundColor:qColor(k)+'e0',borderColor:css('--surface'),borderWidth:1.2,pointStyle:pts.map(e=>regStyle(e.reg)),pointRadius:pts.map(e=>rad(e.reg)),pointHoverRadius:9}});
   ds.push({type:'line',label:'เฉลี่ยรวม',data:[{x:avg.pctCnt,y:0},{x:avg.pctCnt,y:maxY}],borderColor:css('--text2'),borderDash:[6,5],borderWidth:1.5,pointRadius:0});
   ds.push({type:'line',label:'เฉลี่ยรวม ',data:[{x:0,y:avg.pctAmt},{x:maxX,y:avg.pctAmt}],borderColor:css('--text2'),borderDash:[6,5],borderWidth:1.5,pointRadius:0});
   mk('chQuad',{type:'scatter',data:{datasets:ds},options:{onClick:(ev,els)=>{if(els.length){const d=ds[els[0].datasetIndex].data[els[0].index];if(d&&d.e)openEmp(d.e.emp)}},
@@ -629,7 +638,7 @@ function drawTable(rows){
     const tb=tv===null?'<span class="tr na">ข้อมูลไม่พอ</span>':`<span class="tr ${e.tc}">${e.tc==='up'?'▲':e.tc==='dn'?'▼':'●'} ${tv>=0?'+':''}${(tv*100).toFixed(1)} จุด</span>`;
     const qb=e.q?`<span class="qb" style="color:${qColor(e.q)};border-color:${qColor(e.q)}55;background:${qColor(e.q)}18">${Q[e.q].n}</span>`:'<span style="color:var(--muted);font-size:11.5px">เป้าน้อยกว่า 50,000</span>';
     return `<tr data-e="${esc(e.emp)}"><td class="l" style="color:var(--muted)">${page*PAGE+i+1}</td>
-    <td class="l"><div class="nm">${esc(maskName(e.emp))}<small><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${regColor(e.reg)};margin-right:4px"></i>${esc(e.reg)} · ${esc(e.grp)} · ${e.months} เดือน</small></div></td>
+    <td class="l"><div class="nm">${esc(maskName(e.emp))}<small>${regSym(e.reg,10)}${esc(e.reg)} · ${esc(e.grp)} · ${e.months} เดือน</small></div></td>
     <td class="l cell"><span class="big">${pc(e.pctAmt)}</span> <small style="display:inline">${nf(e.got)} / ${nf(e.tgt)}</small>${bar(e.pctAmt,avg.pctAmt,e.pctAmt>=avg.pctAmt?css('--good'):css('--bad'))}</td>
     <td class="l cell"><span class="big">${pc(e.pctCnt)}</span> <small style="display:inline">${nf(e.nOk)} / ${nf(e.nC)} สัญญา</small>${bar(e.pctCnt,avg.pctCnt,e.pctCnt>=avg.pctCnt?css('--good'):css('--bad'))}</td>
     <td class="cell"><span class="big">${nf(Math.max(0,e.gap))}</span><small>อีก ${nf(Math.max(0,e.gapCnt))} สัญญา</small></td>

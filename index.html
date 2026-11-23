@@ -401,6 +401,7 @@ Chart.register({id:'valLabels',afterDatasetsDraw(chart,args,o){
   const ctx=chart.ctx,horiz=chart.options.indexAxis==='y';
   ctx.save();ctx.font="600 11px 'Noto Sans Thai',sans-serif";ctx.lineJoin='round';ctx.lineWidth=3;
   ctx.strokeStyle=css('--surface');ctx.fillStyle=css('--text');
+  const lines={},multi=chart.data.datasets.filter((d,i)=>chart.isDatasetVisible(i)&&!(d.borderDash&&d.borderDash.length)&&chart.getDatasetMeta(i).type==='line').length>1;
   chart.data.datasets.forEach((ds,di)=>{
     if(!chart.isDatasetVisible(di)||ds.type==='scatter'||(ds.borderDash&&ds.borderDash.length))return;
     const meta=chart.getDatasetMeta(di),isBar=meta.type==='bar';
@@ -408,10 +409,22 @@ Chart.register({id:'valLabels',afterDatasetsDraw(chart,args,o){
       let v=ds.data[i];if(v&&typeof v==='object')v=v.y;
       if(v===null||v===undefined||isNaN(v))return;
       const s=o.fmt(v);
-      if(horiz&&isBar){ctx.textAlign='left';ctx.textBaseline='middle';ctx.strokeText(s,el.x+5,el.y);ctx.fillText(s,el.x+5,el.y)}
-      else{ctx.textAlign='center';ctx.textBaseline='bottom';const y=el.y-(isBar?4:8);ctx.strokeText(s,el.x,y);ctx.fillText(s,el.x,y)}
+      if(isBar){
+        ctx.fillStyle=css('--text');
+        if(horiz){ctx.textAlign='left';ctx.textBaseline='middle';ctx.strokeText(s,el.x+5,el.y);ctx.fillText(s,el.x+5,el.y)}
+        else{ctx.textAlign='center';ctx.textBaseline='bottom';ctx.strokeText(s,el.x,el.y-4);ctx.fillText(s,el.x,el.y-4)}
+      }else{(lines[i]=lines[i]||[]).push({x:el.x,y:el.y,s,c:multi&&typeof ds.borderColor==='string'?ds.borderColor:css('--text')})}
     });
   });
+  // line labels: per x, upper half of the series label above their points, lower half below; stacked so they never overlap
+  const GAP=17;ctx.textAlign='center';
+  const put=(p,ly,base)=>{ctx.textBaseline=base;ctx.fillStyle=p.c;ctx.strokeText(p.s,p.x,ly);ctx.fillText(p.s,p.x,ly)};
+  for(const k in lines){
+    const arr=lines[k].sort((p,q)=>p.y-q.y),n=arr.length,h=n===1?1:Math.ceil(n/2);
+    const up=arr.slice(0,h),dn=arr.slice(h);
+    let next=1e9;for(let j=up.length-1;j>=0;j--){const ly=Math.min(up[j].y-8,next-GAP);next=ly;put(up[j],ly,'bottom')}
+    let prev=-1e9;for(let j=0;j<dn.length;j++){const ly=Math.max(dn[j].y+8,prev+GAP);prev=ly;put(dn[j],ly,'top')}
+  }
   ctx.restore();
 }});
 
